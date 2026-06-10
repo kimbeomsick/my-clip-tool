@@ -291,6 +291,7 @@
   "use strict";
 
   const CORE_BASE = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+  const FFMPEG_WORKER = "https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/814.ffmpeg.js";
   const { FFmpeg } = window.FFmpegWASM;
   const ffmpeg = new FFmpeg();
   let loaded = false;
@@ -665,6 +666,7 @@
     try {
       setStatus("FFmpeg 코어 다운로드 중… (최초 1회, 약 30MB)", "");
       await ffmpeg.load({
+        classWorkerURL: await toBlobURL(FFMPEG_WORKER, "text/javascript"),
         coreURL: await toBlobURL(CORE_BASE + "/ffmpeg-core.js", "text/javascript"),
         wasmURL: await toBlobURL(CORE_BASE + "/ffmpeg-core.wasm", "application/wasm"),
       });
