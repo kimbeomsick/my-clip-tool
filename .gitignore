@@ -1,0 +1,13 @@
+# Local tooling / runtime state
+.omc/
+.claude/settings.local.json
+
+# OS / editor
+Thumbs.db
+.DS_Store
+
+# Dependencies / build (for future use)
+node_modules/
+dist/
+build/
+*.log
