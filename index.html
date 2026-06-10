@@ -289,6 +289,7 @@
 <script>
 (function loadLib() {
   var sources = [
+    "vendor/ffmpeg.js",
     "https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js",
     "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"
   ];
@@ -719,9 +720,9 @@ window.__startApp = function () {
     box.textContent =
       "[" + step + " 단계에서 실패]\n" + msg +
       "\n\n해결 시도:\n" +
-      "1) Ctrl+Shift+R 로 강력 새로고침\n" +
-      "2) 광고/추적 차단 확장(uBlock 등) 잠시 끄기 — CDN 차단 가능\n" +
-      "3) 다른 네트워크(회사/학교 방화벽은 unpkg·jsdelivr 차단하기도 함)\n" +
+      "1) 이 주소가 file:// 로 시작하면 안 됩니다 → start.bat 더블클릭 또는 GitHub Pages(https) 주소로 여세요\n" +
+      "2) Ctrl+Shift+R 로 강력 새로고침\n" +
+      "3) 광고/추적 차단 확장(uBlock 등) 잠시 끄기\n" +
       "4) 위 메시지를 그대로 복사해서 알려주세요.";
     console.error("[FFmpeg load] " + step, err);
   }
@@ -733,16 +734,31 @@ window.__startApp = function () {
         "ffmpeg.js 가 로드되지 않았습니다. CDN 차단/네트워크 문제 또는 스크립트 404 가능성."));
       return;
     }
-    let step = "코어 파일 다운로드";
+    let step = "코어 로드";
     try {
-      setStatus("FFmpeg 코어 다운로드 중… (최초 1회, 약 30MB)", "");
-      const classWorkerURL = await toBlobURL(SRC.worker, "text/javascript");
-      const coreURL = await toBlobURL(SRC.core, "text/javascript");
-      const wasmURL = await toBlobURL(SRC.wasm, "application/wasm");
+      // 같은 출처(vendor/)의 파일을 직접 사용 — blob/cross-origin 없이 importScripts 가능
+      setStatus("FFmpeg 코어 로딩 중…", "");
+      const base = location.href;
+      const local = {
+        classWorkerURL: new URL("vendor/814.ffmpeg.js", base).href,
+        coreURL: new URL("vendor/ffmpeg-core.js", base).href,
+        wasmURL: new URL("vendor/ffmpeg-core.wasm", base).href,
+      };
 
-      step = "FFmpeg 코어 초기화(ffmpeg.load)";
-      setStatus("FFmpeg 코어 초기화 중…", "");
-      await ffmpeg.load({ classWorkerURL, coreURL, wasmURL });
+      try {
+        step = "로컬(vendor) 코어 초기화";
+        await ffmpeg.load(local);
+      } catch (localErr) {
+        // vendor 파일이 없거나 실패하면 CDN(blob)으로 폴백
+        console.warn("vendor 로드 실패, CDN 폴백:", localErr);
+        step = "CDN 코어 초기화(폴백)";
+        setStatus("로컬 코어 실패 — CDN에서 다시 시도 중…", "");
+        await ffmpeg.load({
+          classWorkerURL: await toBlobURL(SRC.worker, "text/javascript"),
+          coreURL: await toBlobURL(SRC.core, "text/javascript"),
+          wasmURL: await toBlobURL(SRC.wasm, "application/wasm"),
+        });
+      }
 
       loaded = true;
       setStatus("준비 완료 — 기능을 선택하세요.", "ready");
