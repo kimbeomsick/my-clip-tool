@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>영상 편집 툴 (FFmpeg.wasm)</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181b22;
+    --panel-2: #1f232c;
+    --border: #2a2f3a;
+    --text: #e6e8ee;
+    --muted: #9aa3b2;
+    --accent: #4f8cff;
+    --accent-2: #3a6fd8;
+    --danger: #ff5c5c;
+    --ok: #3ddc84;
+    --warn: #ffb648;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, "Malgun Gothic", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 24px 16px 80px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+
+  .banner {
+    background: rgba(255,182,72,.08);
+    border: 1px solid rgba(255,182,72,.35);
+    color: var(--warn);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    margin-bottom: 16px;
+  }
+  .banner b { color: #ffd591; }
+
+  .status {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); flex: none; }
+  .dot.ready { background: var(--ok); }
+  .dot.err { background: var(--danger); }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab {
+    background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+    padding: 9px 16px; border-radius: 9px; cursor: pointer; font-size: 13.5px;
+    transition: .15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; display: none; }
+  .panel.active { display: block; }
+  .panel h2 { font-size: 15px; margin: 0 0 14px; }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > .field { flex: 1; min-width: 120px; }
+
+  input[type=text], input[type=number], select {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 9px 10px; font-size: 13.5px; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=file] {
+    width: 100%; font-size: 13px; color: var(--muted);
+    background: var(--panel-2); border: 1px dashed var(--border); border-radius: 8px; padding: 14px;
+  }
+  input[type=file]::file-selector-button {
+    background: var(--accent-2); color: #fff; border: none; border-radius: 6px;
+    padding: 7px 12px; margin-right: 12px; cursor: pointer;
+  }
+
+  .checkbox { display: flex; align-items: center; gap: 8px; }
+  .checkbox input { width: auto; }
+
+  button.action {
+    background: var(--accent); color: #fff; border: none; border-radius: 9px;
+    padding: 11px 18px; font-size: 14px; cursor: pointer; font-weight: 600; transition: .15s;
+  }
+  button.action:hover:not(:disabled) { background: var(--accent-2); }
+  button.action:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 7px; padding: 7px 11px; font-size: 12.5px; cursor: pointer;
+  }
+  button.ghost:hover { border-color: var(--accent); }
+
+  video { width: 100%; max-height: 320px; background: #000; border-radius: 10px; margin-bottom: 10px; }
+
+  .hint { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+
+  .progress-wrap { margin-top: 16px; display: none; }
+  .progress-wrap.show { display: block; }
+  .bar { height: 10px; background: var(--panel-2); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+  .bar > i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), #7aa7ff); transition: width .2s; }
+  .progress-label { font-size: 12px; color: var(--muted); margin-top: 6px; display: flex; justify-content: space-between; }
+
+  .filelist { list-style: none; padding: 0; margin: 10px 0 0; }
+  .filelist li {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 12px; margin-bottom: 7px; cursor: grab; font-size: 13px;
+  }
+  .filelist li.dragging { opacity: .4; }
+  .filelist li .grip { color: var(--muted); }
+  .filelist li .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .filelist li .rm { color: var(--danger); cursor: pointer; background: none; border: none; font-size: 16px; }
+
+  .log {
+    margin-top: 14px; background: #0b0d11; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: #8b94a6;
+    max-height: 130px; overflow: auto; white-space: pre-wrap; display: none;
+  }
+  .log.show { display: block; }
+  .toggle-log { font-size: 11.5px; color: var(--accent); cursor: pointer; margin-top: 10px; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎬 영상 편집 툴</h1>
+  <div class="sub">FFmpeg.wasm (single-thread) · 모든 처리는 브라우저 안에서만 실행됩니다. 파일은 외부로 전송되지 않습니다.</div>
+
+  <div class="banner">
+    ⚠️ <b>작업 중 이 탭을 닫지 마세요.</b> 모든 변환은 브라우저 메모리에서 처리됩니다.
+    대용량 파일(수백 MB 이상)은 메모리 부족으로 실패할 수 있으니 가능하면 짧은 구간/낮은 화질로 먼저 테스트하세요.
+  </div>
+
+  <div class="status">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">FFmpeg 코어 로딩 준비 중…</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="cut">✂️ 컷 편집</button>
+    <button class="tab" data-tab="concat">🔗 이어붙이기</button>
+    <button class="tab" data-tab="gif">🎞️ GIF 변환</button>
+    <button class="tab" data-tab="quality">⚙️ 화질 조정</button>
+  </div>
+
+  <!-- ===== 컷 편집 ===== -->
+  <section class="panel active" id="tab-cut">
+    <h2>✂️ 컷 편집 — 원하는 구간만 잘라내기</h2>
+    <div class="field">
+      <label>영상 파일</label>
+      <input type="file" id="cutFile" accept="video/*" />
+    </div>
+    <video id="cutVideo" controls style="display:none"></video>
+    <div class="row">
+      <div class="field">
+        <label>시작 시간 (HH:MM:SS 또는 초)</label>
+        <input type="text" id="cutStart" placeholder="예: 00:00:05 또는 5" value="0" />
+        <button class="ghost" type="button" data-set="cutStart" data-video="cutVideo" style="margin-top:6px">⏱ 현재 재생 위치로</button>
+      </div>
+      <div class="field">
+        <label>끝 시간 (HH:MM:SS 또는 초)</label>
+        <input type="text" id="cutEnd" placeholder="예: 00:00:10 또는 10" />
+        <button class="ghost" type="button" data-set="cutEnd" data-video="cutVideo" style="margin-top:6px">⏱ 현재 재생 위치로</button>
+      </div>
+    </div>
+    <div class="field checkbox">
+      <input type="checkbox" id="cutReencode" />
+      <label for="cutReencode" style="margin:0">정밀 컷 (재인코딩 — 느리지만 프레임 단위 정확. 끄면 빠르지만 키프레임 단위로 잘림)</label>
+    </div>
+    <button class="action" id="cutBtn" disabled>구간 잘라서 다운로드</button>
+  </section>
+
+  <!-- ===== 이어붙이기 ===== -->
+  <section class="panel" id="tab-concat">
+    <h2>🔗 이어붙이기 — 여러 영상을 하나로</h2>
+    <div class="field">
+      <label>영상 파일 (여러 개 선택)</label>
+      <input type="file" id="concatFiles" accept="video/*" multiple />
+      <div class="hint">아래 목록을 드래그해서 순서를 바꿀 수 있습니다.</div>
+    </div>
+    <ul class="filelist" id="concatList"></ul>
+    <div class="field checkbox" style="margin-top:12px">
+      <input type="checkbox" id="concatReencode" checked />
+      <label for="concatReencode" style="margin:0">재인코딩으로 합치기 (코덱/해상도가 달라도 안전 · 1280×720 기준 정규화 · 각 클립에 오디오 필요)</label>
+    </div>
+    <div class="hint">체크 해제 시: 빠른 무손실 합치기(스트림 복사). 단, 모든 영상의 코덱·해상도가 동일해야 정상 동작합니다.</div>
+    <button class="action" id="concatBtn" disabled style="margin-top:14px">순서대로 합쳐서 다운로드</button>
+  </section>
+
+  <!-- ===== GIF ===== -->
+  <section class="panel" id="tab-gif">
+    <h2>🎞️ GIF 변환</h2>
+    <div class="field">
+      <label>영상 파일</label>
+      <input type="file" id="gifFile" accept="video/*" />
+    </div>
+    <video id="gifVideo" controls style="display:none"></video>
+    <div class="row">
+      <div class="field">
+        <label>시작 시간</label>
+        <input type="text" id="gifStart" value="0" />
+        <button class="ghost" type="button" data-set="gifStart" data-video="gifVideo" style="margin-top:6px">⏱ 현재 위치</button>
+      </div>
+      <div class="field">
+        <label>끝 시간</label>
+        <input type="text" id="gifEnd" placeholder="예: 3" />
+        <button class="ghost" type="button" data-set="gifEnd" data-video="gifVideo" style="margin-top:6px">⏱ 현재 위치</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>FPS (프레임/초)</label>
+        <input type="number" id="gifFps" value="10" min="1" max="50" />
+      </div>
+      <div class="field">
+        <label>출력 너비 (px, 높이 자동)</label>
+        <input type="number" id="gifWidth" value="480" min="16" max="1920" />
+      </div>
+    </div>
+    <div class="hint">고품질 팔레트(palettegen/paletteuse) 2-pass로 변환합니다. 구간이 길고 FPS·너비가 크면 용량이 매우 커질 수 있습니다.</div>
+    <button class="action" id="gifBtn" disabled style="margin-top:14px">GIF로 변환 & 다운로드</button>
+  </section>
+
+  <!-- ===== 화질 조정 ===== -->
+  <section class="panel" id="tab-quality">
+    <h2>⚙️ 화질 / 해상도 조정</h2>
+    <div class="field">
+      <label>영상 파일</label>
+      <input type="file" id="qFile" accept="video/*" />
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>해상도</label>
+        <select id="qRes">
+          <option value="1080">1080p</option>
+          <option value="720" selected>720p</option>
+          <option value="480">480p</option>
+          <option value="custom">커스텀</option>
+        </select>
+      </div>
+      <div class="field" id="qCustomWrap" style="display:none">
+        <label>커스텀 너비×높이 (높이 -2 = 자동)</label>
+        <div class="row">
+          <input type="number" id="qW" placeholder="너비 예:1280" />
+          <input type="number" id="qH" placeholder="높이 예:-2" value="-2" />
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>CRF 화질: <b id="qCrfVal">23</b> <span class="hint">(0=무손실 최고화질, 51=최저화질 / 낮을수록 용량↑)</span></label>
+      <input type="range" id="qCrf" min="0" max="51" value="23" />
+    </div>
+    <div class="field">
+      <label>출력 포맷</label>
+      <select id="qFormat">
+        <option value="mp4" selected>MP4 (H.264 / AAC)</option>
+        <option value="webm">WebM (VP9 / Opus)</option>
+      </select>
+    </div>
+    <button class="action" id="qBtn" disabled>변환 & 다운로드</button>
+  </section>
+
+  <!-- 진행률 (공용) -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="bar"><i id="progressBar"></i></div>
+    <div class="progress-label">
+      <span id="progressText">처리 중…</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <span class="toggle-log" id="toggleLog">로그 보기 ▾</span>
+    <pre class="log" id="logBox"></pre>
+  </div>
+</div>
+
+<!-- FFmpeg.wasm UMD (single-thread) -->
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const CORE_BASE = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+  const { FFmpeg } = window.FFmpegWASM;
+  const ffmpeg = new FFmpeg();
+  let loaded = false;
+  let busy = false;
+
+  // ---- 유틸 ----
+  const $ = (id) => document.getElementById(id);
+
+  async function fetchFile(input) {
+    if (input instanceof File || input instanceof Blob) {
+      return new Uint8Array(await input.arrayBuffer());
+    }
+    const res = await fetch(input);
+    return new Uint8Array(await res.arrayBuffer());
+  }
+  async function toBlobURL(url, mime) {
+    const res = await fetch(url);
+    const buf = await res.arrayBuffer();
+    return URL.createObjectURL(new Blob([buf], { type: mime }));
+  }
+
+  // "HH:MM:SS", "MM:SS", "SS", 소수 모두 허용 → 초(float)
+  function parseTime(str) {
+    if (str == null) return NaN;
+    str = String(str).trim();
+    if (str === "") return NaN;
+    if (str.indexOf(":") === -1) return parseFloat(str);
+    const parts = str.split(":").map((p) => parseFloat(p));
+    if (parts.some(isNaN)) return NaN;
+    let sec = 0;
+    for (const p of parts) sec = sec * 60 + p;
+    return sec;
+  }
+  function ext(name) {
+    const i = name.lastIndexOf(".");
+    return i >= 0 ? name.slice(i + 1).toLowerCase() : "mp4";
+  }
+
+  // ---- 상태 표시 ----
+  const statusDot = $("statusDot");
+  const statusText = $("statusText");
+  function setStatus(text, kind) {
+    statusText.textContent = text;
+    statusDot.className = "dot" + (kind ? " " + kind : "");
+  }
+
+  // ---- 진행률 ----
+  const progressWrap = $("progressWrap");
+  const progressBar = $("progressBar");
+  const progressText = $("progressText");
+  const progressPct = $("progressPct");
+  const logBox = $("logBox");
+
+  function showProgress(label) {
+    progressWrap.classList.add("show");
+    progressText.textContent = label || "처리 중…";
+    setProgress(0);
+    logBox.textContent = "";
+  }
+  function hideProgressSoon() {
+    setTimeout(() => progressWrap.classList.remove("show"), 1500);
+  }
+  function setProgress(pct) {
+    pct = Math.max(0, Math.min(100, pct));
+    progressBar.style.width = pct.toFixed(1) + "%";
+    progressPct.textContent = Math.round(pct) + "%";
+  }
+
+  ffmpeg.on("progress", ({ progress }) => {
+    if (progress >= 0 && progress <= 1) setProgress(progress * 100);
+  });
+  ffmpeg.on("log", ({ message }) => {
+    logBox.textContent += message + "\n";
+    logBox.scrollTop = logBox.scrollHeight;
+  });
+  $("toggleLog").addEventListener("click", () => {
+    logBox.classList.toggle("show");
+    $("toggleLog").textContent = logBox.classList.contains("show") ? "로그 숨기기 ▴" : "로그 보기 ▾";
+  });
+
+  // ---- 작업 중 닫기 경고 ----
+  window.addEventListener("beforeunload", (e) => {
+    if (busy) { e.preventDefault(); e.returnValue = ""; }
+  });
+
+  // ---- 다운로드 ----
+  function triggerDownload(data, filename, mime) {
+    const blob = new Blob([data.buffer ? data.buffer : data], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  // ---- 버튼 잠금 ----
+  const actionBtns = ["cutBtn", "concatBtn", "gifBtn", "qBtn"];
+  function setBusy(on) {
+    busy = on;
+    actionBtns.forEach((id) => { $(id).disabled = on || !loaded; });
+  }
+
+  // 안전 실행 래퍼
+  async function runJob(label, fn) {
+    if (!loaded) { alert("FFmpeg가 아직 로딩 중입니다. 잠시만 기다려주세요."); return; }
+    if (busy) return;
+    setBusy(true);
+    showProgress(label);
+    try {
+      await fn();
+      setProgress(100);
+      progressText.textContent = "완료! 다운로드가 시작됩니다.";
+    } catch (err) {
+      console.error(err);
+      progressText.textContent = "오류: " + (err && err.message ? err.message : err);
+      alert(
+        "처리 중 오류가 발생했습니다.\n\n" +
+        (err && err.message ? err.message : err) +
+        "\n\n파일이 너무 크면 메모리 부족(OOM)으로 실패할 수 있습니다. 더 짧은 구간이나 낮은 화질로 시도해 보세요."
+      );
+    } finally {
+      setBusy(false);
+      hideProgressSoon();
+    }
+  }
+
+  // 작업 후 임시 파일 정리
+  async function cleanup(names) {
+    for (const n of names) {
+      try { await ffmpeg.deleteFile(n); } catch (e) {}
+    }
+  }
+
+  // ============ 탭 전환 ============
+  document.querySelectorAll(".tab").forEach((t) => {
+    t.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach((x) => x.classList.remove("active"));
+      t.classList.add("active");
+      $("tab-" + t.dataset.tab).classList.add("active");
+    });
+  });
+
+  // 미리보기 연결 + "현재 위치" 버튼
+  function bindPreview(fileInputId, videoId) {
+    $(fileInputId).addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      const v = $(videoId);
+      if (!f) { v.style.display = "none"; return; }
+      v.src = URL.createObjectURL(f);
+      v.style.display = "block";
+    });
+  }
+  bindPreview("cutFile", "cutVideo");
+  bindPreview("gifFile", "gifVideo");
+
+  document.querySelectorAll("button[data-set]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const v = $(btn.dataset.video);
+      if (!v || isNaN(v.currentTime)) return;
+      $(btn.dataset.set).value = v.currentTime.toFixed(2);
+    });
+  });
+
+  // ============ 1. 컷 편집 ============
+  $("cutBtn").addEventListener("click", () => {
+    const file = $("cutFile").files[0];
+    if (!file) return alert("영상 파일을 선택하세요.");
+    const start = parseTime($("cutStart").value);
+    const end = parseTime($("cutEnd").value);
+    if (isNaN(start) || isNaN(end)) return alert("시작/끝 시간을 올바르게 입력하세요.");
+    if (end <= start) return alert("끝 시간이 시작 시간보다 커야 합니다.");
+    const reencode = $("cutReencode").checked;
+    const e = ext(file.name);
+    const inName = "cut_in." + e;
+    const outName = "cut_out." + e;
+    const dur = end - start;
+
+    runJob("구간 자르는 중…", async () => {
+      await ffmpeg.writeFile(inName, await fetchFile(file));
+      let args;
+      if (reencode) {
+        args = ["-ss", String(start), "-i", inName, "-t", String(dur),
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                "-c:a", "aac", outName];
+      } else {
+        args = ["-ss", String(start), "-i", inName, "-t", String(dur), "-c", "copy", outName];
+      }
+      await ffmpeg.exec(args);
+      const data = await ffmpeg.readFile(outName);
+      triggerDownload(data, "cut_" + file.name, "video/" + (e === "mov" ? "quicktime" : e));
+      await cleanup([inName, outName]);
+    });
+  });
+
+  // ============ 2. 이어붙이기 ============
+  let concatItems = []; // {file, id}
+  const concatList = $("concatList");
+  let cid = 0;
+
+  $("concatFiles").addEventListener("change", (e) => {
+    for (const f of e.target.files) concatItems.push({ file: f, id: ++cid });
+    e.target.value = "";
+    renderConcat();
+  });
+
+  function renderConcat() {
+    concatList.innerHTML = "";
+    concatItems.forEach((it, idx) => {
+      const li = document.createElement("li");
+      li.draggable = true;
+      li.dataset.idx = idx;
+      li.innerHTML =
+        '<span class="grip">⠿</span>' +
+        '<span class="name">' + (idx + 1) + ". " + escapeHtml(it.file.name) + "</span>" +
+        '<button class="rm" title="삭제">×</button>';
+      li.querySelector(".rm").addEventListener("click", () => {
+        concatItems = concatItems.filter((x) => x.id !== it.id);
+        renderConcat();
+      });
+      // 드래그 정렬
+      li.addEventListener("dragstart", () => { li.classList.add("dragging"); dragIdx = idx; });
+      li.addEventListener("dragend", () => li.classList.remove("dragging"));
+      li.addEventListener("dragover", (ev) => {
+        ev.preventDefault();
+        const tgt = Number(li.dataset.idx);
+        if (dragIdx === null || dragIdx === tgt) return;
+        const moved = concatItems.splice(dragIdx, 1)[0];
+        concatItems.splice(tgt, 0, moved);
+        dragIdx = tgt;
+        renderConcat();
+      });
+      concatList.appendChild(li);
+    });
+  }
+  let dragIdx = null;
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  $("concatBtn").addEventListener("click", () => {
+    if (concatItems.length < 2) return alert("2개 이상의 영상을 선택하세요.");
+    const reencode = $("concatReencode").checked;
+
+    runJob("이어붙이는 중…", async () => {
+      const written = [];
+      const inputs = [];
+      for (let i = 0; i < concatItems.length; i++) {
+        const f = concatItems[i].file;
+        const name = "c_in_" + i + "." + ext(f.name);
+        await ffmpeg.writeFile(name, await fetchFile(f));
+        written.push(name);
+        inputs.push(name);
+      }
+
+      let outName, mime, args;
+      if (reencode) {
+        outName = "concat_out.mp4";
+        mime = "video/mp4";
+        args = [];
+        inputs.forEach((n) => args.push("-i", n));
+        // 각 입력을 1280x720으로 정규화 후 concat (영상+오디오)
+        let filter = "";
+        let maps = "";
+        inputs.forEach((_, i) => {
+          filter += "[" + i + ":v]scale=1280:720:force_original_aspect_ratio=decrease," +
+                    "pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v" + i + "];";
+          filter += "[" + i + ":a]aresample=44100[a" + i + "];";
+          maps += "[v" + i + "][a" + i + "]";
+        });
+        filter += maps + "concat=n=" + inputs.length + ":v=1:a=1[outv][outa]";
+        args.push("-filter_complex", filter, "-map", "[outv]", "-map", "[outa]",
+                  "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                  "-c:a", "aac", outName);
+      } else {
+        // concat 데뮤서 (스트림 복사) — 동일 코덱/해상도 필요
+        outName = "concat_out." + ext(inputs[0]);
+        mime = "video/mp4";
+        const listTxt = inputs.map((n) => "file '" + n + "'").join("\n");
+        await ffmpeg.writeFile("concat_list.txt", new TextEncoder().encode(listTxt));
+        written.push("concat_list.txt");
+        args = ["-f", "concat", "-safe", "0", "-i", "concat_list.txt", "-c", "copy", outName];
+      }
+
+      await ffmpeg.exec(args);
+      const data = await ffmpeg.readFile(outName);
+      triggerDownload(data, "merged_" + Date.now() + "." + ext(outName), mime);
+      await cleanup(written.concat([outName]));
+    });
+  });
+
+  // ============ 3. GIF ============
+  $("gifBtn").addEventListener("click", () => {
+    const file = $("gifFile").files[0];
+    if (!file) return alert("영상 파일을 선택하세요.");
+    const start = parseTime($("gifStart").value);
+    const end = parseTime($("gifEnd").value);
+    if (isNaN(start) || isNaN(end)) return alert("시작/끝 시간을 올바르게 입력하세요.");
+    if (end <= start) return alert("끝 시간이 시작 시간보다 커야 합니다.");
+    const fps = parseInt($("gifFps").value, 10) || 10;
+    const width = parseInt($("gifWidth").value, 10) || 480;
+    const dur = end - start;
+    const inName = "gif_in." + ext(file.name);
+
+    runJob("GIF 변환 중 (팔레트 생성)…", async () => {
+      await ffmpeg.writeFile(inName, await fetchFile(file));
+      const vf = "fps=" + fps + ",scale=" + width + ":-1:flags=lanczos";
+      // pass 1: 팔레트 생성
+      await ffmpeg.exec(["-ss", String(start), "-t", String(dur), "-i", inName,
+                         "-vf", vf + ",palettegen", "palette.png"]);
+      progressText.textContent = "GIF 변환 중 (적용)…";
+      // pass 2: 팔레트 적용
+      await ffmpeg.exec(["-ss", String(start), "-t", String(dur), "-i", inName, "-i", "palette.png",
+                         "-lavfi", vf + "[x];[x][1:v]paletteuse", "gif_out.gif"]);
+      const data = await ffmpeg.readFile("gif_out.gif");
+      triggerDownload(data, file.name.replace(/\.[^.]+$/, "") + ".gif", "image/gif");
+      await cleanup([inName, "palette.png", "gif_out.gif"]);
+    });
+  });
+
+  // ============ 4. 화질 조정 ============
+  $("qCrf").addEventListener("input", (e) => { $("qCrfVal").textContent = e.target.value; });
+  $("qRes").addEventListener("change", (e) => {
+    $("qCustomWrap").style.display = e.target.value === "custom" ? "block" : "none";
+  });
+
+  $("qBtn").addEventListener("click", () => {
+    const file = $("qFile").files[0];
+    if (!file) return alert("영상 파일을 선택하세요.");
+    const res = $("qRes").value;
+    const crf = parseInt($("qCrf").value, 10);
+    const format = $("qFormat").value;
+    const inName = "q_in." + ext(file.name);
+
+    let scaleFilter;
+    if (res === "custom") {
+      const w = parseInt($("qW").value, 10);
+      const h = parseInt($("qH").value, 10);
+      if (isNaN(w) && isNaN(h)) return alert("커스텀 너비 또는 높이를 입력하세요.");
+      scaleFilter = "scale=" + (isNaN(w) ? -2 : w) + ":" + (isNaN(h) ? -2 : h);
+    } else {
+      // 가로 기준 -2(짝수 자동), 세로 = 선택 해상도
+      scaleFilter = "scale=-2:" + res;
+    }
+
+    runJob("화질 변환 중…", async () => {
+      await ffmpeg.writeFile(inName, await fetchFile(file));
+      let outName, mime, args;
+      if (format === "webm") {
+        outName = "q_out.webm"; mime = "video/webm";
+        args = ["-i", inName, "-vf", scaleFilter,
+                "-c:v", "libvpx-vp9", "-crf", String(crf), "-b:v", "0",
+                "-c:a", "libopus", outName];
+      } else {
+        outName = "q_out.mp4"; mime = "video/mp4";
+        args = ["-i", inName, "-vf", scaleFilter,
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crf),
+                "-pix_fmt", "yuv420p", "-c:a", "aac", outName];
+      }
+      await ffmpeg.exec(args);
+      const data = await ffmpeg.readFile(outName);
+      triggerDownload(data, file.name.replace(/\.[^.]+$/, "") + "_" + res + "." + (format === "webm" ? "webm" : "mp4"), mime);
+      await cleanup([inName, outName]);
+    });
+  });
+
+  // ============ FFmpeg 로드 ============
+  (async function load() {
+    try {
+      setStatus("FFmpeg 코어 다운로드 중… (최초 1회, 약 30MB)", "");
+      await ffmpeg.load({
+        coreURL: await toBlobURL(CORE_BASE + "/ffmpeg-core.js", "text/javascript"),
+        wasmURL: await toBlobURL(CORE_BASE + "/ffmpeg-core.wasm", "application/wasm"),
+      });
+      loaded = true;
+      setStatus("준비 완료 — 기능을 선택하세요.", "ready");
+      actionBtns.forEach((id) => { $(id).disabled = false; });
+    } catch (err) {
+      console.error(err);
+      setStatus("FFmpeg 로딩 실패: " + (err && err.message ? err.message : err), "err");
+    }
+  })();
+})();
+</script>
+</body>
+</html>
